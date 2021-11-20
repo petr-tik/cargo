@@ -1,10 +1,9 @@
 use crate::command_prelude::*;
 
-use cargo::util::errors::CargoResult;
 use cargo::{
     core::{Target, Workspace},
-    ops::{self, CompileOptions},
-    util::get_available_targets,
+    ops::CompileOptions,
+    util::{errors::CargoResult, get_available_targets},
 };
 use skim::{self, prelude::*};
 use std::io::Cursor;
@@ -66,7 +65,6 @@ fn choose_target(
 }
 
 pub fn exec(config: &mut Config, args: &ArgMatches<'_>) -> CliResult {
-    dbg!(args);
     let ws = args.workspace(config)?;
 
     let compile_opts = args.compile_options(
@@ -76,12 +74,14 @@ pub fn exec(config: &mut Config, args: &ArgMatches<'_>) -> CliResult {
         ProfileChecking::Custom,
     )?;
 
-    let target = choose_target(&ws, &compile_opts);
+    let target = choose_target(&ws, &compile_opts)?;
 
     // TODO 3 compile the selected target - demo-only
     // the final query command will only create skim/fzf selecting UIs
     // and the bash plumbing will forward the selection to the command line
-    ops::compile(&ws, &compile_opts)?;
+    // ops::compile(&ws, &compile_opts)?;
+
+    println!("{:?}", target[0].text());
 
     Ok(())
 }
