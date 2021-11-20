@@ -8,7 +8,7 @@ use cargo_util::ProcessBuilder;
 use std::fmt::Write;
 use std::path::PathBuf;
 
-fn get_available_targets<'a>(
+pub fn get_available_targets<'a>(
     filter_fn: fn(&Target) -> bool,
     ws: &'a Workspace<'_>,
     options: &'a CompileOptions,

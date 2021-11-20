@@ -6,9 +6,11 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::str;
+use std::str::FromStr;
 
 use cargo_test_support::registry::Package;
 use cargo_test_support::tools::echo_subcommand;
+use cargo_test_support::ProjectBuilder;
 use cargo_test_support::{
     basic_bin_manifest, cargo_exe, cargo_process, paths, project, project_in_home,
 };
@@ -379,4 +381,14 @@ fn closed_output_ok() {
     let status = child.wait().unwrap();
     assert!(status.success());
     assert!(s.is_empty(), "{}", s);
+}
+
+#[cargo_test]
+fn fuzzy_works_on_cargo() {
+    // TODO run it on the cargo project itself
+
+    let dangerous_path = "./";
+    let pathbuf = PathBuf::from_str(dangerous_path).unwrap();
+    let p = ProjectBuilder::new(pathbuf).build();
+    p.cargo("query").with_stdout_contains("cargo").run();
 }

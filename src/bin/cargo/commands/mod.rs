@@ -37,6 +37,7 @@ pub fn builtin() -> Vec<App> {
         verify_project::cli(),
         version::cli(),
         yank::cli(),
+        query::cli(),
     ]
 }
 
@@ -77,6 +78,7 @@ pub fn builtin_exec(cmd: &str) -> Option<fn(&mut Config, &ArgMatches) -> CliResu
         "verify-project" => verify_project::exec,
         "version" => version::exec,
         "yank" => yank::exec,
+        "query" => query::exec,
         _ => return None,
     };
     Some(f)
@@ -90,6 +92,7 @@ pub mod config;
 pub mod doc;
 pub mod fetch;
 pub mod fix;
+pub mod query;
 pub mod generate_lockfile;
 pub mod git_checkout;
 pub mod help;
