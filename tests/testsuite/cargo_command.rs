@@ -383,8 +383,6 @@ fn closed_output_ok() {
 
 #[cargo_test]
 fn fuzzy_works_on_cargo() {
-    // TODO run it on the cargo project itself
-
     let p = project()
         .file(
             "Cargo.toml",
@@ -400,5 +398,7 @@ fn fuzzy_works_on_cargo() {
         )
         .file("src/main.rs", "fn main() {}")
         .build();
-    p.cargo("query").with_stdout_contains("my_binary").run();
+    let mut cargo = p.cargo("build").build_command();
+    cargo.stdin(Stdio::piped());
+    let mut child = cargo.spawn().unwrap();
 }
