@@ -5,6 +5,7 @@ use crate::util::interning::InternedString;
 use crate::util::toml::{ProfilePackageSpec, StringOrBool, TomlProfile, TomlProfiles, U32OrBool};
 use crate::util::{closest_msg, config, CargoResult, Config};
 use anyhow::{bail, Context as _};
+use itertools::Itertools;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::Hash;
 use std::{cmp, env, fmt, hash};
@@ -411,6 +412,14 @@ impl Profiles {
 
         let maker = self.get_profile_maker(profile_name).unwrap();
         maker.get_profile(None, true, UnitFor::new_normal())
+    }
+
+    pub fn list_all<'a>(&self) -> Vec<&str> {
+        let mut res: Vec<&str> = vec![];
+        for prof in self.by_name.keys().collect_vec() {
+            res.push(prof);
+        }
+        res
     }
 
     /// Gets the directory name for a profile, like `debug` or `release`.
