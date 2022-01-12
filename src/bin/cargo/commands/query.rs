@@ -21,17 +21,15 @@ pub fn cli() -> App {
         .after_help("Run `cargo help query` for more detailed information.\n")
 }
 
+// REVIEW doesn't look like this macro supports 2 nested enums
+// Buildable and ProjectConfig (Features, Profiles)
 arg_enum! {
-// TODO split into 2 nestings - Buildable and ProjectConfig (Features, Profiles)
 pub enum QueryTargets {
     // Find all buildable binary executable
     Binaries,
     // Find all examples in the workspace
-    // REVIEW should examples also be present in Binaries?
     Examples,
     // Find all the tests
-    // REVIEW Target::is_test finds only integration tests, I want to list all test targets
-    // REVIEW rust-analyzer reuse for finding runnables
     Tests,
     // Find all benchmark build targets
     Benches,
@@ -47,6 +45,8 @@ impl QueryTargets {
     fn as_target_pred(&self) -> fn(&Target) -> bool {
         match self {
             QueryTargets::Binaries => Target::is_bin,
+            // REVIEW Target::is_test finds only integration tests, I want to list all test targets
+            // REVIEW rust-analyzer reuse for finding runnables
             QueryTargets::Tests => Target::is_test,
             QueryTargets::Benches => Target::is_bench,
             QueryTargets::Examples => Target::is_example,
@@ -87,6 +87,8 @@ fn get_available_profiles<'a>(profs: &'a Profiles) -> CargoResult<Vec<&'a str>> 
     Ok(res)
 }
 
+fn get_all_features(ws: &Workspace<'_>, compile_opts: &CompileOptions) {}
+
 // TODO move to QueryTargets impl to
 fn make_skim_inputs<'a>(
     ws: &Workspace<'_>,
@@ -110,7 +112,7 @@ fn make_skim_inputs<'a>(
     Ok(targets.join("\n"))
 }
 
-fn choose_target(
+fn fuzzy_choose(
     ws: &Workspace<'_>,
     compile_opts: &CompileOptions,
     query_target: QueryTargets,
@@ -143,7 +145,7 @@ pub fn exec(config: &mut Config, args: &ArgMatches<'_>) -> CliResult {
         ProfileChecking::Custom,
     )?;
 
-    let target = choose_target(&ws, &compile_opts, query_target)?;
+    let target = fuzzy_choose(&ws, &compile_opts, query_target)?;
 
     println!("{:?}", target[0].text());
 
