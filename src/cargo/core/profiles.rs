@@ -10,6 +10,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::Hash;
 use std::{cmp, env, fmt, hash};
 
+type ProfileName = InternedString;
+
 /// Collection of all profiles.
 #[derive(Clone, Debug)]
 pub struct Profiles {
@@ -18,9 +20,9 @@ pub struct Profiles {
     /// - `build.incremental` config value.
     incremental: Option<bool>,
     /// Map of profile name to directory name for that profile.
-    dir_names: HashMap<InternedString, InternedString>,
+    dir_names: HashMap<ProfileName, InternedString>,
     /// The profile makers. Key is the profile name.
-    by_name: HashMap<InternedString, ProfileMaker>,
+    by_name: HashMap<ProfileName, ProfileMaker>,
     /// The original profiles written by the user in the manifest and config.
     ///
     /// This is here to assist with error reporting, as the `ProfileMaker`
@@ -29,7 +31,7 @@ pub struct Profiles {
     /// Whether or not unstable "named" profiles are enabled.
     named_profiles_enabled: bool,
     /// The profile the user requested to use.
-    requested_profile: InternedString,
+    requested_profile: ProfileName,
     /// The host target for rustc being used by this `Profiles`.
     rustc_host: InternedString,
 }
