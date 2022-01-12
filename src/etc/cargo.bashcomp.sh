@@ -125,7 +125,8 @@ _cargo()
 				COMPREPLY=( $( compgen -W "$(_bin_names)" -- "$cur" ) )
 				;;
 			--test)
-				COMPREPLY=( $( compgen -W "$(_test_names)" -- "$cur" ) )
+				local test_result=$(cargo run -- query tests)
+				COMPREPLY=("$test_result")
 				;;
 			--bench)
 				COMPREPLY=( $( compgen -W "$(_benchmark_names)" -- "$cur" ) )
