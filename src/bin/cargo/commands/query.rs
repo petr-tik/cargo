@@ -1,7 +1,7 @@
 use crate::command_prelude::*;
 
 use cargo::{
-    core::{Target, Workspace},
+    core::{compiler::CompileKind, Target, Workspace},
     ops::CompileOptions,
     util::{errors::CargoResult, get_available_targets},
 };
@@ -52,12 +52,29 @@ impl QueryTargets {
             QueryTargets::Features | QueryTargets::Profile => unimplemented!(),
         }
     }
+
+    fn allows_multi(&self) -> bool {
+        match self {
+            QueryTargets::Binaries
+            | QueryTargets::Examples
+            | QueryTargets::Tests
+            | QueryTargets::Benches
+            | QueryTargets::Profile => false,
+            QueryTargets::Features => true,
+        }
+    }
 }
 
-// TODO generalise it to tests that can be
-// specified and cargo run that takes
-// cargo query --bin $SPECIFIC_BINARY_TARGET
-// cargo query --example $SPECIFIC_EXAMPLE
+impl From<&QueryTargets> for CompileMode {
+    fn from(val: &QueryTargets) -> Self {
+        match val {
+            QueryTargets::Binaries | QueryTargets::Examples => CompileMode::Build,
+            QueryTargets::Tests => CompileMode::Test,
+            QueryTargets::Benches => CompileMode::Bench,
+            QueryTargets::Features | QueryTargets::Profile => unimplemented!(),
+        }
+    }
+}
 
 fn choose_target(
     ws: &Workspace<'_>,
@@ -74,33 +91,31 @@ fn choose_target(
     let item_reader = SkimItemReader::default();
     let items = item_reader.of_bufread(Cursor::new(input));
 
-    let skim_options_for_single_selection = SkimOptionsBuilder::default()
+    let skim_options = SkimOptionsBuilder::default()
         .height(Some("70%"))
-        // TODO condition on the input
-        .multi(false)
+        .multi(query_target.allows_multi())
         .build()
         .unwrap();
 
     // TODO can only build 1 target, if not error with nothing
-    let selected_items: Vec<Arc<dyn SkimItem>> =
-        Skim::run_with(&skim_options_for_single_selection, Some(items))
-            .map(|out| out.selected_items)
-            .unwrap_or_else(|| Vec::new());
+    let selected_items: Vec<Arc<dyn SkimItem>> = Skim::run_with(&skim_options, Some(items))
+        .map(|out| out.selected_items)
+        .unwrap_or_else(|| Vec::new());
 
     Ok(selected_items)
 }
 
 pub fn exec(config: &mut Config, args: &ArgMatches<'_>) -> CliResult {
+    let query_target = value_t_or_exit!(args.value_of("type"), QueryTargets);
     let ws = args.workspace(config)?;
 
     let compile_opts = args.compile_options(
         config,
-        CompileMode::Build,
+        (&query_target).into(),
         Some(&ws),
         ProfileChecking::Custom,
     )?;
 
-    let query_target = value_t_or_exit!(args.value_of("type"), QueryTargets);
     let target = choose_target(&ws, &compile_opts, query_target)?;
 
     println!("{:?}", target[0].text());
