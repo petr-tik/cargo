@@ -41,6 +41,12 @@ pub enum QueryTargets {
 }
 }
 
+struct MySkimOptions<'a> {
+    allows_multi: bool,
+    prompt: Option<&'a str>,
+    input: String,
+}
+
 impl QueryTargets {
     fn as_target_pred(&self) -> fn(&Target) -> bool {
         match self {
@@ -65,12 +71,13 @@ impl QueryTargets {
         }
     }
 
-    fn make_skim_inputs(
+    fn make_skim_options(
         &self,
         ws: &Workspace<'_>,
         compile_opts: &CompileOptions,
-    ) -> CargoResult<String> {
-        // REVIEW can I get all available Profiles somehow without passing a requested_profile?
+    ) -> CargoResult<MySkimOptions<'_>> {
+        // REVIEW can I get all Profiles available in the workspace somehow without passing a requested_profile?
+        // ws.profiles() returned None when I ran it
         let profs = Profiles::new(ws, compile_opts.build_config.requested_profile)?;
         let targets = match self {
             QueryTargets::Binaries
@@ -84,7 +91,12 @@ impl QueryTargets {
         };
 
         // pass string representations of targets to skim
-        Ok(targets.join("\n"))
+        Ok(MySkimOptions {
+            input: targets.join("\n"),
+            // TODO Customise the prompt with the `QueryTargets` .to_string() representation
+            prompt: Some("Choose> "),
+            allows_multi: self.allows_multi(),
+        })
     }
 }
 
@@ -114,13 +126,14 @@ fn fuzzy_choose(
     compile_opts: &CompileOptions,
     query_target: QueryTargets,
 ) -> CargoResult<Vec<Arc<dyn SkimItem>>> {
-    let input = query_target.make_skim_inputs(ws, compile_opts)?;
+    let options = query_target.make_skim_options(ws, compile_opts)?;
 
-    let items = SkimItemReader::default().of_bufread(Cursor::new(input));
+    let items = SkimItemReader::default().of_bufread(Cursor::new(options.input));
 
     let skim_options = SkimOptionsBuilder::default()
         .height(Some("70%"))
-        .multi(query_target.allows_multi())
+        .multi(options.allows_multi)
+        .prompt(options.prompt)
         .build()
         .unwrap();
 
