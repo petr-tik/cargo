@@ -64,6 +64,28 @@ impl QueryTargets {
             QueryTargets::Features => true,
         }
     }
+
+    fn make_skim_inputs(
+        &self,
+        ws: &Workspace<'_>,
+        compile_opts: &CompileOptions,
+    ) -> CargoResult<String> {
+        // REVIEW can I get all available Profiles somehow without passing a requested_profile?
+        let profs = Profiles::new(ws, compile_opts.build_config.requested_profile)?;
+        let targets = match self {
+            QueryTargets::Binaries
+            | QueryTargets::Examples
+            | QueryTargets::Tests
+            | QueryTargets::Benches => {
+                get_available_targets(self.as_target_pred(), &ws, &compile_opts)?
+            }
+            QueryTargets::Profile => get_available_profiles(&profs)?,
+            QueryTargets::Features => unimplemented!(),
+        };
+
+        // pass string representations of targets to skim
+        Ok(targets.join("\n"))
+    }
 }
 
 impl From<&QueryTargets> for CompileMode {
@@ -87,37 +109,12 @@ fn get_available_profiles<'a>(profs: &'a Profiles) -> CargoResult<Vec<&'a str>> 
     Ok(res)
 }
 
-fn get_all_features(ws: &Workspace<'_>, compile_opts: &CompileOptions) {}
-
-// TODO move to QueryTargets impl to
-fn make_skim_inputs<'a>(
-    ws: &Workspace<'_>,
-    compile_opts: &CompileOptions,
-    query_target: &QueryTargets,
-) -> CargoResult<String> {
-    // REVIEW can I get all available Profiles somehow without passing a requested_profile?
-    let profs = Profiles::new(ws, compile_opts.build_config.requested_profile)?;
-    let targets = match query_target {
-        QueryTargets::Binaries
-        | QueryTargets::Examples
-        | QueryTargets::Tests
-        | QueryTargets::Benches => {
-            get_available_targets(query_target.as_target_pred(), &ws, &compile_opts)?
-        }
-        QueryTargets::Profile => get_available_profiles(&profs)?,
-        QueryTargets::Features => unimplemented!(),
-    };
-
-    // pass string representations of targets to skim
-    Ok(targets.join("\n"))
-}
-
 fn fuzzy_choose(
     ws: &Workspace<'_>,
     compile_opts: &CompileOptions,
     query_target: QueryTargets,
 ) -> CargoResult<Vec<Arc<dyn SkimItem>>> {
-    let input = make_skim_inputs(ws, compile_opts, &query_target)?;
+    let input = query_target.make_skim_inputs(ws, compile_opts)?;
 
     let items = SkimItemReader::default().of_bufread(Cursor::new(input));
 
@@ -127,7 +124,7 @@ fn fuzzy_choose(
         .build()
         .unwrap();
 
-    // TODO can only build 1 target, if not error with nothing
+    // TODO return selection, otherwise bail
     let selected_items: Vec<Arc<dyn SkimItem>> = Skim::run_with(&skim_options, Some(items))
         .map(|out| out.selected_items)
         .unwrap_or_else(|| Vec::new());
