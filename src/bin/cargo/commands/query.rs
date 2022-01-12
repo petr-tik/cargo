@@ -144,7 +144,9 @@ pub fn exec(config: &mut Config, args: &ArgMatches<'_>) -> CliResult {
 
     let target = fuzzy_choose(&ws, &compile_opts, query_target)?;
 
-    println!("{:?}", target[0].text());
+    let out_as_bytes = target[0].text().to_owned();
+
+    config.shell().print_ansi_stdout(out_as_bytes.as_bytes())?;
 
     Ok(())
 }
