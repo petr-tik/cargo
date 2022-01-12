@@ -5,16 +5,24 @@ use cargo::{
     ops::CompileOptions,
     util::{errors::CargoResult, get_available_targets},
 };
+use clap::{arg_enum, value_t_or_exit};
 use skim::{self, prelude::*};
 use std::io::Cursor;
 
 pub fn cli() -> App {
     subcommand("query")
+        .arg(
+            Arg::with_name("type")
+                .help("What are we querying for")
+                .possible_values(&QueryTargets::variants())
+                .case_insensitive(true),
+        )
         .about("List query targets")
         .after_help("Run `cargo help query` for more detailed information.\n")
 }
 
-enum QueryTargets {
+arg_enum! {
+pub enum QueryTargets {
     // Find all buildable binary executable
     Binaries,
     // Find all examples in the workspace
@@ -24,9 +32,26 @@ enum QueryTargets {
     // REVIEW Target::is_test finds only integration tests, I want to list all test targets
     // REVIEW rust-analyzer reuse for finding runnables
     Tests,
+    // Find all benchmark build targets
+    Benches,
     // Find all features defined in this workspace to help complete
     // --features <TAB><TAB>
     Features,
+    // Build profile
+    Profile,
+}
+}
+
+impl QueryTargets {
+    fn as_target_pred(&self) -> fn(&Target) -> bool {
+        match self {
+            QueryTargets::Binaries => Target::is_bin,
+            QueryTargets::Tests => Target::is_test,
+            QueryTargets::Benches => Target::is_bench,
+            QueryTargets::Examples => Target::is_example,
+            QueryTargets::Features | QueryTargets::Profile => unimplemented!(),
+        }
+    }
 }
 
 // TODO generalise it to tests that can be
@@ -37,8 +62,9 @@ enum QueryTargets {
 fn choose_target(
     ws: &Workspace<'_>,
     compile_opts: &CompileOptions,
+    query_target: QueryTargets,
 ) -> CargoResult<Vec<Arc<dyn SkimItem>>> {
-    let targets = get_available_targets(Target::is_bin, &ws, &compile_opts)?;
+    let targets = get_available_targets(query_target.as_target_pred(), &ws, &compile_opts)?;
 
     // pass string representations of targets to skim
     let input = targets.join("\n");
@@ -74,12 +100,8 @@ pub fn exec(config: &mut Config, args: &ArgMatches<'_>) -> CliResult {
         ProfileChecking::Custom,
     )?;
 
-    let target = choose_target(&ws, &compile_opts)?;
-
-    // TODO 3 compile the selected target - demo-only
-    // the final query command will only create skim/fzf selecting UIs
-    // and the bash plumbing will forward the selection to the command line
-    // ops::compile(&ws, &compile_opts)?;
+    let query_target = value_t_or_exit!(args.value_of("type"), QueryTargets);
+    let target = choose_target(&ws, &compile_opts, query_target)?;
 
     println!("{:?}", target[0].text());
 
