@@ -56,7 +56,12 @@ impl QueryTargets {
             QueryTargets::Tests => Target::is_test,
             QueryTargets::Benches => Target::is_bench,
             QueryTargets::Examples => Target::is_example,
-            QueryTargets::Features | QueryTargets::Profile => unimplemented!(),
+            QueryTargets::Features | QueryTargets::Profile => {
+                unimplemented!(
+                    "You shouldn't be filtering build targets with {:?}",
+                    self.to_string()
+                )
+            }
         }
     }
 
