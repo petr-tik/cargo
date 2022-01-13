@@ -131,7 +131,9 @@ fn fuzzy_choose(
     let items = SkimItemReader::default().of_bufread(Cursor::new(options.input));
 
     let skim_options = SkimOptionsBuilder::default()
-        .height(Some("70%"))
+        // TODO move to a field in MySkimOptions that can be heuristically set.
+        // makes now sense to have a massive window for a handful of candidates
+        .height(Some("40%"))
         .multi(options.allows_multi)
         .prompt(options.prompt)
         .build()
