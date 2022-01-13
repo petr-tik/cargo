@@ -5,26 +5,15 @@ use cargo::{
     ops::CompileOptions,
     util::{errors::CargoResult, get_available_targets},
 };
-use clap::{arg_enum, value_t_or_exit};
+use clap::{ArgEnum, PossibleValue};
 use skim::{self, prelude::*};
 use std::io::Cursor;
-
-pub fn cli() -> App {
-    subcommand("query")
-        .arg(
-            Arg::with_name("type")
-                .help("What are we querying for")
-                .possible_values(&QueryTargets::variants())
-                .case_insensitive(true),
-        )
-        .about("List query targets")
-        .after_help("Run `cargo help query` for more detailed information.\n")
-}
+use std::{fmt::Display, str::FromStr};
 
 // REVIEW doesn't look like this macro supports 2 nested enums
 // Buildable and ProjectConfig (Features, Profiles)
-arg_enum! {
-pub enum QueryTargets {
+#[derive(clap::ArgEnum, Clone, Debug)]
+enum QueryTargets {
     // Find all buildable binary executable
     Binaries,
     // Find all examples in the workspace
@@ -39,6 +28,67 @@ pub enum QueryTargets {
     // Build profile
     Profile,
 }
+
+impl QueryTargets {
+    pub fn possible_values() -> impl Iterator<Item = PossibleValue<'static>> {
+        QueryTargets::value_variants()
+            .iter()
+            .filter_map(ArgEnum::to_possible_value)
+    }
+}
+
+impl FromStr for QueryTargets {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> CargoResult<Self> {
+        match s {
+            "tests" => Ok(QueryTargets::Tests),
+            "binaries" => Ok(QueryTargets::Binaries),
+            "examples" => Ok(QueryTargets::Examples),
+            "benches" => Ok(QueryTargets::Benches),
+            "features" => Ok(QueryTargets::Features),
+            "profiles" => Ok(QueryTargets::Profile),
+            _ => Err(anyhow::format_err!("Unknown type {}", s)),
+        }
+    }
+}
+
+pub fn cli() -> App {
+    subcommand("query")
+        .arg(
+            Arg::new("type")
+                .help("What are we querying for")
+                .possible_values(QueryTargets::possible_values())
+                .ignore_case(true),
+        )
+        .about("List query targets")
+        .after_help("Run `cargo help query` for more detailed information.\n")
+        // TODO all these below are hacks around the fact that
+        // `ArgMatches::compile_options` retrieves all of those fields
+        // under the hood
+        .arg_message_format()
+        .arg_jobs()
+        .arg_features()
+        .arg_target_triple("Placeholder to make the damn thing compile")
+        .arg_profile("Placeholder to make the damn thing compile")
+        .arg_targets_all(
+            "Placeholder to make the damn thing compile",
+            "Placeholder to make the damn thing compile",
+            "Placeholder to make the damn thing compile",
+            "Placeholder to make the damn thing compile",
+            "Placeholder to make the damn thing compile",
+            "Placeholder to make the damn thing compile",
+            "Placeholder to make the damn thing compile",
+            "Placeholder to make the damn thing compile",
+            "Placeholder to make the damn thing compile",
+            "Placeholder to make the damn thing compile",
+        )
+}
+
+impl Display for QueryTargets {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
 }
 
 struct MySkimOptions<'a> {
@@ -152,8 +202,9 @@ fn fuzzy_choose(
     Ok(selected_items)
 }
 
-pub fn exec(config: &mut Config, args: &ArgMatches<'_>) -> CliResult {
-    let query_target = value_t_or_exit!(args.value_of("type"), QueryTargets);
+pub fn exec(config: &mut Config, args: &ArgMatches) -> CliResult {
+    let query_target: QueryTargets = args.value_of_t_or_exit("type");
+
     let ws = args.workspace(config)?;
     let compile_opts = args.compile_options(
         config,
