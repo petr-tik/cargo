@@ -1,11 +1,13 @@
 use crate::command_prelude::*;
 
+use anyhow::format_err;
 use cargo::{
     core::{profiles::Profiles, Target, Workspace},
     ops::CompileOptions,
     util::{errors::CargoResult, get_available_targets},
 };
 use clap::{ArgEnum, PossibleValue};
+use itertools::join;
 use skim::{self, prelude::*};
 use std::io::Cursor;
 use std::{fmt::Display, str::FromStr};
@@ -195,11 +197,17 @@ fn fuzzy_choose(
         .unwrap();
 
     // TODO return selection, otherwise bail
-    let selected_items: Vec<Arc<dyn SkimItem>> = Skim::run_with(&skim_options, Some(items))
-        .map(|out| out.selected_items)
-        .unwrap_or_else(|| Vec::new());
+    let selected_items = Skim::run_with(&skim_options, Some(items)).unwrap();
+    match selected_items.final_event {
+        // REVIEW Maybe replace with Some/None
+        Event::EvActAbort => return Err(format_err!("Aborted without selecting anything").into()),
+        Event::EvActAccept(_) => Ok(selected_items.selected_items),
+        _ => unimplemented!(),
+    }
+}
 
-    Ok(selected_items)
+fn convert_selected_items_to_string(items: Vec<Arc<dyn SkimItem>>) -> CargoResult<String> {
+    Ok(join(items.iter().map(|i| i.text()), ","))
 }
 
 pub fn exec(config: &mut Config, args: &ArgMatches) -> CliResult {
@@ -213,11 +221,10 @@ pub fn exec(config: &mut Config, args: &ArgMatches) -> CliResult {
         ProfileChecking::Custom,
     )?;
 
-    let target = fuzzy_choose(&ws, &compile_opts, query_target)?;
-
-    let out_as_bytes = target[0].text().to_owned();
-
-    config.shell().print_ansi_stdout(out_as_bytes.as_bytes())?;
+    match convert_selected_items_to_string(fuzzy_choose(&ws, &compile_opts, query_target)?) {
+        Ok(it) => config.shell().print_ansi_stdout(it.as_bytes())?,
+        Err(_) => (),
+    };
 
     Ok(())
 }
