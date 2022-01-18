@@ -10,7 +10,7 @@ use clap::{ArgEnum, PossibleValue};
 use itertools::join;
 use skim::{self, prelude::*};
 use std::io::Cursor;
-use std::{fmt::Display, str::FromStr};
+use std::str::FromStr;
 
 // REVIEW doesn't look like this macro supports 2 nested enums
 // Buildable and ProjectConfig (Features, Profiles)
@@ -39,6 +39,19 @@ impl QueryTargets {
     }
 }
 
+impl AsRef<str> for QueryTargets {
+    fn as_ref(&self) -> &str {
+        match self {
+            QueryTargets::Binaries => "binaries",
+            QueryTargets::Examples => "examples",
+            QueryTargets::Tests => "tests",
+            QueryTargets::Benches => "benches",
+            QueryTargets::Features => "features",
+            QueryTargets::Profile => "profile",
+        }
+    }
+}
+
 impl FromStr for QueryTargets {
     type Err = anyhow::Error;
 
@@ -49,7 +62,7 @@ impl FromStr for QueryTargets {
             "examples" => Ok(QueryTargets::Examples),
             "benches" => Ok(QueryTargets::Benches),
             "features" => Ok(QueryTargets::Features),
-            "profiles" => Ok(QueryTargets::Profile),
+            "profile" => Ok(QueryTargets::Profile),
             _ => Err(anyhow::format_err!("Unknown type {}", s)),
         }
     }
@@ -87,16 +100,14 @@ pub fn cli() -> App {
         )
 }
 
-impl Display for QueryTargets {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
-    }
-}
-
 struct MySkimOptions<'a> {
     allows_multi: bool,
-    prompt: Option<&'a str>,
+    prompt: &'a str,
+    // REVIEW make a &str if possible
     input: String,
+    // TODO add a heuristic to calc height as percentage
+    // makes no sense to have a massive window for a handful of candidates
+    abs_height: usize,
 }
 
 impl QueryTargets {
@@ -111,7 +122,7 @@ impl QueryTargets {
             QueryTargets::Features | QueryTargets::Profile => {
                 unimplemented!(
                     "You shouldn't be filtering build targets with {:?}",
-                    self.to_string()
+                    self.as_ref()
                 )
             }
         }
@@ -150,9 +161,9 @@ impl QueryTargets {
         // pass string representations of targets to skim
         Ok(MySkimOptions {
             input: targets.join("\n"),
-            // TODO Customise the prompt with the `QueryTargets` .to_string() representation
-            prompt: Some("Choose> "),
+            prompt: self.as_ref(),
             allows_multi: self.allows_multi(),
+            abs_height: targets.len() * 3,
         })
     }
 }
@@ -185,24 +196,26 @@ fn fuzzy_choose(
 ) -> CargoResult<Vec<Arc<dyn SkimItem>>> {
     let options = query_target.make_skim_options(ws, compile_opts)?;
 
-    let items = SkimItemReader::default().of_bufread(Cursor::new(options.input));
+    let abs_height = format!("{}", options.abs_height);
+    let full_prompt = format!("Choose {}> ", options.prompt);
 
     let skim_options = SkimOptionsBuilder::default()
-        // TODO move to a field in MySkimOptions that can be heuristically set.
-        // makes now sense to have a massive window for a handful of candidates
-        .height(Some("40%"))
+        .prompt(Some(&full_prompt))
+        .height(Some(&abs_height))
         .multi(options.allows_multi)
-        .prompt(options.prompt)
         .build()
         .unwrap();
 
-    // TODO return selection, otherwise bail
-    let selected_items = Skim::run_with(&skim_options, Some(items)).unwrap();
-    match selected_items.final_event {
-        // REVIEW Maybe replace with Some/None
-        Event::EvActAbort => return Err(format_err!("Aborted without selecting anything").into()),
-        Event::EvActAccept(_) => Ok(selected_items.selected_items),
-        _ => unimplemented!(),
+    let items = SkimItemReader::default().of_bufread(Cursor::new(options.input));
+
+    let skim_res = match Skim::run_with(&skim_options, Some(items)) {
+        Some(res) => Ok(res),
+        None => Err(anyhow::format_err!("Internal skim error")),
+    }?;
+
+    match skim_res.final_event {
+        Event::EvActAccept(_) => Ok(skim_res.selected_items),
+        _ => return Err(format_err!("Aborted without selecting anything").into()),
     }
 }
 
