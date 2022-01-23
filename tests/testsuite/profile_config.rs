@@ -422,6 +422,49 @@ fn named_env_profile() {
 }
 
 #[cargo_test]
+fn list_all_profiles() {
+    // Exercises config named profies.
+    // foo -> middle -> bar -> dev
+    // middle exists in Cargo.toml, the others in .cargo/config
+    use super::config::ConfigBuilder;
+
+    use cargo::core::profiles::Profiles;
+    use cargo::core::Workspace;
+    use cargo::util::interning::InternedString;
+    use std::fs;
+    fs::write(
+        paths::root().join("Cargo.toml"),
+        r#"
+            [workspace]
+
+            [profile.middle]
+            inherits = "dev"
+            codegen-units = 1
+            opt-level = 1
+            [profile.middle.package.dep]
+            overflow-checks = false
+
+            [profile.foo]
+            inherits = "middle"
+
+            [profile.foo.build-override]
+            codegen-units = 5
+            debug-assertions = false
+            [profile.foo.package.dep]
+            codegen-units = 8
+        "#,
+    )
+    .unwrap();
+    let config = ConfigBuilder::new().build();
+    let profile_name = InternedString::new("foo");
+    let ws = Workspace::new(&paths::root().join("Cargo.toml"), &config).unwrap();
+    let profiles = Profiles::new(&ws, profile_name).unwrap();
+    let mut res = profiles.list_all();
+    let mut expected = vec!["bench", "dev", "doc", "foo", "middle", "release", "test"];
+    assert_eq!(res.sort(), expected.sort());
+}
+
+#[cargo_test]
 fn test_with_dev_profile() {
     // The `test` profile inherits from `dev` for both local crates and
     // dependencies.

@@ -1,6 +1,5 @@
 use crate::command_prelude::*;
 
-use anyhow::format_err;
 use cargo::{
     core::{profiles::Profiles, Target, Workspace},
     ops::CompileOptions,
@@ -100,11 +99,17 @@ pub fn cli() -> App {
         )
 }
 
+type NewLineSeparatedInput = String;
+
 struct MySkimOptions<'a> {
+    /// Can the user choose multiple options
     allows_multi: bool,
+    /// A substring that specifies what the user will choose on the UI
     prompt: &'a str,
+    /// Input to present to the user
     // REVIEW make a &str if possible
-    input: String,
+    input: NewLineSeparatedInput,
+    /// Absolute height (in lines) of the UI
     // TODO add a heuristic to calc height as percentage
     // makes no sense to have a massive window for a handful of candidates
     abs_height: usize,
@@ -215,7 +220,8 @@ fn fuzzy_choose(
 
     match skim_res.final_event {
         Event::EvActAccept(_) => Ok(skim_res.selected_items),
-        _ => return Err(format_err!("Aborted without selecting anything").into()),
+        // TODO bring back proper error handling Err(format_err!("Aborted without selecting anything").into())
+        _ => Ok(vec![]),
     }
 }
 
@@ -234,9 +240,10 @@ pub fn exec(config: &mut Config, args: &ArgMatches) -> CliResult {
         ProfileChecking::Custom,
     )?;
 
-    match convert_selected_items_to_string(fuzzy_choose(&ws, &compile_opts, query_target)?) {
-        Ok(it) => config.shell().print_ansi_stdout(it.as_bytes())?,
-        Err(_) => (),
+    if let Ok(it) =
+        convert_selected_items_to_string(fuzzy_choose(&ws, &compile_opts, query_target)?)
+    {
+        config.shell().print_ansi_stdout(it.as_bytes())?
     };
 
     Ok(())
